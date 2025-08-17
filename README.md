@@ -88,6 +88,7 @@ Connect your computer’s audio output to your **terminal unit (TU)** or softwar
 
 ## Known Limitations
 
+- **BUGGY!**: It has many quirks. Refresh and/or clear cache if you have issues. MAY NOT WORK WITH ALL FEEDS
 - **CORS**: Some sites block proxy fetches; try another trusted proxy or mirror.  
 - **Full‑text extraction**: Heuristics can miss content or include odd bits on complex sites.  
 - **Browser support**: Tested primarily in Chromium‑based browsers. Mobile browsers may suspend audio contexts.  
