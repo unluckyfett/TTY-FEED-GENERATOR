@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TTY AFSK FEED GENERATOR</title>
+  <style>
+    :root{--bg:#0f1115;--card:#141821;--ink:#e6edf3;--muted:#9aa4b2;--mono:ui-monospace,Menlo,Consolas,monospace;--sans:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#0b0d12,#0f1115 30%);color:var(--ink);font-family:var(--sans)}
+    header{padding:18px 20px;border-bottom:1px solid #1e2430;background:linear-gradient(180deg,#121622,#0e1118);position:sticky;top:0;z-index:3}
+    h1{margin:0;font-size:20px;letter-spacing:.4px}
+    .wrap{max-width:1100px;margin:0 auto;padding:18px}
+    .grid{display:grid;grid-template-columns:1.25fr .75fr;gap:16px}
+    .card{background:var(--card);border:1px solid #202633;border-radius:14px;padding:14px 14px 12px;box-shadow:0 10px 24px rgba(0,0,0,.24)}
+    .card h2{margin:0 0 10px 0;font-size:16px;color:#c9d4e2}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    input,select,button,textarea{width:100%;box-sizing:border-box}
+    select,input[type=number],input[type=text]{background:#0e121a;border:1px solid #202737;color:var(--ink);padding:10px;border-radius:10px;font-family:var(--mono)}
+    input[type=checkbox]{transform:translateY(1px)}
+    .pill{display:flex;align-items:center;gap:8px;background:#0f1320;border:1px solid #223045;border-radius:12px;padding:8px 10px;color:#bcd}
+    .btn{background:linear-gradient(180deg,#1c6dd8,#0e50a8);border:none;color:#fff;padding:10px 12px;border-radius:10px;font-weight:600;cursor:pointer}
+    .btn.secondary{background:#1b2230;border:1px solid #2a3547}
+    .btn.warn{background:linear-gradient(180deg,#f39a4c,#d8781a)}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    textarea{width:100%;min-height:160px;background:#0c0f16;border:1px solid #1f2432;color:#9efc98;border-radius:10px;padding:10px;font-family:var(--mono);white-space:pre}
+    .muted{color:var(--muted)}
+    .hint{font-size:12px;color:#a6b1bf;margin-top:4px}
+    .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .small{font-size:12px}
+    .footer{margin-top:10px;font-size:12px;color:#94a0af}
+    .hr{height:1px;background:#1c2331;margin:10px 0}
+    pre{background:#0c0f16;border:1px solid #1f2432;border-radius:10px;padding:10px;color:#cde0ff;white-space:pre-wrap}
+    .mono{font-family:var(--mono)}
+
+    /* Status visuals (bigger + new color scheme) */
+    .badge{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:14px;background:#0a1422;border:1px solid #213248;color:#e6eeff;font-size:16px}
+    #status{font-weight:900;letter-spacing:.4px;text-transform:uppercase}
+    #status.is-idle{background:linear-gradient(135deg,#1c2f6a,#0b1333);border-color:#5b8cff;color:#e2ecff;box-shadow:0 0 0 3px rgba(91,140,255,.2),0 0 28px rgba(91,140,255,.35) inset;animation:breathe 2.5s ease-in-out infinite}
+    #status.is-stopped{background:linear-gradient(135deg,#4a2a0d,#241106);border-color:#ffb067;color:#ffe7cf;box-shadow:0 0 0 3px rgba(255,176,103,.2),0 0 28px rgba(255,176,103,.35) inset;animation:breathe 2.5s ease-in-out infinite}
+    #status.is-live{background:linear-gradient(135deg,#0f3a1b,#0a1e11);border-color:#34c759;color:#d6ffe2;box-shadow:0 0 0 3px rgba(52,199,89,.2),0 0 28px rgba(52,199,89,.35) inset}
+    #status.is-error{background:linear-gradient(135deg,#5a0f0f,#2a0707);border-color:#ff5757;color:#ffd3d3;box-shadow:0 0 0 3px rgba(255,87,87,.2),0 0 28px rgba(255,87,87,.3) inset}
+    #status.is-sending{background:linear-gradient(135deg,#2b1a6a,#120a33);border-color:#8a7dff;color:#efeaff;box-shadow:0 0 0 3px rgba(138,125,255,.2),0 0 28px rgba(138,125,255,.35) inset}
+    #status.is-fetching{background:linear-gradient(135deg,#0a3440,#031c22);border-color:#26c6da;color:#d9fbff;box-shadow:0 0 0 3px rgba(38,198,218,.2),0 0 28px rgba(38,198,218,.35) inset}
+    #status.is-seeded{background:linear-gradient(135deg,#0b3838,#051f1f);border-color:#2bdad3;color:#d8fffb;box-shadow:0 0 0 3px rgba(43,218,211,.2),0 0 28px rgba(43,218,211,.35) inset}
+
+    @keyframes breathe{0%{transform:scale(1);filter:saturate(110%)}50%{transform:scale(1.05);filter:saturate(130%)}100%{transform:scale(1);filter:saturate(110%)}}
+    /* Feed Manager */
+    .feedman{margin-top:8px}
+    .feedlist{display:flex;flex-direction:column;gap:8px;margin-top:8px;max-height:190px;overflow:auto}
+    .feedItem{display:grid;grid-template-columns:54px 180px 1fr auto auto auto;align-items:center;gap:8px;background:#0e121a;border:1px solid #202737;padding:6px 8px;border-radius:10px;transition:background .2s,border-color .2s}
+    .feedItem:hover{background:#11172a;border-color:#2a3450}
+    .feedItem input[type=text]{width:100%}
+    .feedItem .mini{font-size:11px;color:#9aa4b2;margin-left:6px}
+    .feedman .bar{gap:10px}
+    .feedtable-header{display:grid;grid-template-columns:54px 180px 1fr auto auto auto;gap:8px;padding:6px 8px;margin-top:8px;border-bottom:1px solid #1f2736;color:#9aa4b2;font-size:12px}
+    .feedItem .switch{appearance:none;width:42px;height:24px;border-radius:999px;background:#1a2538;border:1px solid #2b3a58;position:relative;outline:none;cursor:pointer}
+    .feedItem .switch::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#7a89a6;transition:left .2s,background .2s}
+    .feedItem .switch:checked{background:#1e3d74;border-color:#2d67c2}
+    .feedItem .switch:checked::after{left:20px;background:#9ec2ff}
+    .feedItem button.btn.secondary{padding:6px 8px}
+    .feedItem button.btn.warn{padding:6px 10px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TTY AFSK FEED GENERATOR</h1>
+  </header>
+  <div class="wrap">
+    <section class="card" id="instructions">
+      <h2>Quick Start</h2>
+      <ol class="small">
+        <li>Use the <strong>Feed Manager</strong> below to add/remove feeds (you can manage multiple sources). Supports <strong>RSS/Atom</strong>, <strong>JSON Feed</strong>, and <strong>plain text</strong>.</li>
+        <li>(Optional) Enable <strong>Full text (follow links)</strong> to fetch each article page and append the body after the headline.</li>
+        <li>Click <strong>Start</strong>. New items appear in <em>Preview</em> and AFSK will start automatically.</li>
+        <li>If you see CORS errors, keep the default <code>https://corsproxy.io/?</code> or set your own trusted proxy.</li>
+      </ol>
+      <div class="hr"></div>
+      <div class="small">
+        <strong>Sample feeds to try:</strong>
+        <ul>
+          <li>BBC News (RSS): <a href="https://feeds.bbci.co.uk/news/rss.xml" target="_blank" rel="noopener">https://feeds.bbci.co.uk/news/rss.xml</a></li>
+          <li>NPR Top Stories (RSS): <a href="https://feeds.npr.org/1001/rss.xml" target="_blank" rel="noopener">https://feeds.npr.org/1001/rss.xml</a></li>
+          <li>Hackaday Blog (RSS): <a href="https://hackaday.com/blog/feed/" target="_blank" rel="noopener">https://hackaday.com/blog/feed/</a></li>
+          <li>Ars Technica (RSS): <a href="https://feeds.arstechnica.com/arstechnica/index" target="_blank" rel="noopener">https://feeds.arstechnica.com/arstechnica/index</a></li>
+          <li>TechCrunch (RSS): <a href="https://techcrunch.com/feed/" target="_blank" rel="noopener">https://techcrunch.com/feed/</a></li>
+          <li>NASA Breaking News (RSS): <a href="https://www.nasa.gov/rss/dyn/breaking_news.rss" target="_blank" rel="noopener">https://www.nasa.gov/rss/dyn/breaking_news.rss</a></li>
+          <li>USGS Earthquakes — All, past hour (ATOM): <a href="https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.atom" target="_blank" rel="noopener">https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.atom</a></li>
+          <li>NWS Active Alerts (JSON): <a href="https://api.weather.gov/alerts/active" target="_blank" rel="noopener">https://api.weather.gov/alerts/active</a></li>
+          <li>Smithsonian/USGS Weekly Volcanic Activity (RSS): <a href="https://volcano.si.edu/news/WeeklyVolcanoRSS.xml" target="_blank" rel="noopener">https://volcano.si.edu/news/WeeklyVolcanoRSS.xml</a></li>
+          
+        </ul>
+      </div>
+    </section>
+    <div class="grid">
+
+      <!-- LEFT: Feed + Preview -->
+      <section class="card">
+        <h2>Feed Source</h2>
+        <div class="row">
+          <div style="grid-column:1 / -1">
+            <label>CORS Proxy Prefix (optional)</label>
+            <input id="corsPrefix" type="text" value="https://corsproxy.io/?" placeholder="e.g. https://api.allorigins.win/raw?url=" />
+            <div class="hint">If you get CORS errors, use a proxy prefix you trust or host your own.</div>
+          </div>
+        </div>
+        <div class="feedman">
+          <div class="bar">
+            <input id="newFeed" type="text" placeholder="Add feed… e.g. https://example.com/rss" />
+            <button class="btn" id="addFeed">Add</button>
+            <button class="btn secondary" id="clearFeeds" title="Remove all managed feeds">Clear</button>
+          </div>
+          <div class="feedtable-header">
+            <span class="c-on">On</span>
+            <span class="c-nick">Nickname</span>
+            <span class="c-url">URL</span>
+            <span class="c-actions">Actions</span>
+          </div>
+          <div id="feedList" class="feedlist"></div>
+          <div class="hint">Only <strong>enabled</strong> feeds are used. Use nicknames to tag batches in the output.</div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Poll Interval (sec)</label>
+            <input id="pollSec" type="number" min="5" step="1" value="60" />
+          </div>
+        </div>
+        <div class="bar" style="margin-top:8px">
+          <button class="btn" id="start">Start</button>
+          <button class="btn secondary" id="stop">Stop</button>
+          <span class="pill small"><input type="checkbox" id="autoSend" checked /> Auto‑send new items</span>
+          <span class="pill small"><input type="checkbox" id="dedup" checked /> De‑duplicate by title/link</span>
+          <span class="pill small"><input type="checkbox" id="stripLinksUI" checked /> Strip links in Preview</span>
+          <span class="pill small"><input type="checkbox" id="fullText" /> Full text (follow links)</span>
+          <span class="pill small"><input type="checkbox" id="updatesOnly" checked /> Updates only (seed on start)</span>
+          <span class="badge" id="status">IDLE</span>
+          <button class="btn secondary" id="resetSeen" title="Forget items we've already sent/previewed">Reset Seen</button>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div>
+            <label>Last Fetched (raw → extracted → sanitized)</label>
+            <textarea id="fetched" class="mono" readonly></textarea>
+          </div>
+          <div>
+            <label>Preview (wrapped, ready to send)</label>
+            <textarea id="preview" class="mono" readonly></textarea>
+            <div class="bar">
+              <button class="btn" id="testBell">Test Bell</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: Encoder settings -->
+      <section class="card">
+        <h2>Encoder Settings</h2>
+        <!-- Hidden but enabled behaviors -->
+        <input id="crlfOrder" type="checkbox" checked hidden />
+        <input id="syncCRLF" type="checkbox" checked hidden />
+        <input id="forceLTRSend" type="checkbox" checked hidden />
+
+        <div class="row">
+          <div>
+            <label>Line Length (cols)</label>
+            <input id="lineLen" type="number" min="20" max="132" value="72" />
+          </div>
+          <div>
+            <label>Map Unsupported → Nearest</label>
+            <div class="pill"><input id="mapNearest" type="checkbox" checked /> <span>COERCE TO ITA2</span></div>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>BELL Trigger Keywords</label>
+            <input id="bellKeywords" type="text" placeholder="ALERT, WARNING, URGENT" />
+          </div>
+          <div></div>
+        </div>
+        <div class="row">
+          <div style="grid-column:1 / span 2">
+            <label>Bell Mode & Repeats</label>
+            <div class="row" style="grid-template-columns:2fr 1fr;gap:8px">
+              <select id="bellMode">
+                <option value="none">NONE</option>
+                <option value="ita2" selected>ITA2: FIGS‑BELL (00101)</option>
+              </select>
+              <input id="bellRepeat" type="number" min="1" max="5" step="1" value="3" />
+            </div>
+            <div class="hint">Many TTYs ring more reliably with 2–3 bells back‑to‑back.</div>
+          </div>
+        </div>
+
+        <h2 style="margin-top:12px">AFSK (WebAudio) — 45.45 Baud</h2>
+        <div class="row">
+          <div>
+            <label>Baud</label>
+            <input id="baud" type="number" min="10" max="100" step="0.01" value="45.45" />
+          </div>
+          <div>
+            <label>Stop Bits</label>
+            <input id="stopBits" type="number" min="1" max="2" step="0.5" value="1.5" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Mark Freq (Hz)</label>
+            <input id="mark" type="number" min="100" max="5000" value="2125" />
+          </div>
+          <div>
+            <label>Space Freq (Hz)</label>
+            <input id="space" type="number" min="100" max="5000" value="2295" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Audio Level</label>
+            <input id="level" type="number" min="0.05" max="1" step="0.05" value="0.5" />
+          </div>
+          <div></div>
+        </div>
+        <div class="bar">
+          <button class="btn" id="stopAudio">Stop Audio</button>
+          <span class="hint">Continuous‑phase AFSK. Start=SPACE, LSB‑first, MARK stop bits. Last update: <span id="lastUpdate">never</span></span>
+        </div>
+      </section>
+    </div>
+
+    <div class="footer">Build: <span id="build"></span> · Audio engine: WebAudio · © 2025 Frankie Caswell — Licensed under
+    <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a></div>
+    <img src="logo.png" alt="Logo" style="height:75px; width:auto;">
+  </div>
+
+<script>
+// ======= Utilities =======
+const nowStamp=()=>new Date().toISOString().replace(/T/,' ').replace(/\..+/, 'Z');
+const byId=(id)=>document.getElementById(id);
+byId('build').textContent=nowStamp();
+function setStatus(txt){
+  const el = byId('status');
+  if(!el) return;
+  el.textContent = txt;
+  const m = (txt||'').toUpperCase();
+  el.classList.remove('is-idle','is-stopped','is-live','is-error','is-sending','is-seeded','is-fetching');
+  if(m.includes('IDLE')) el.classList.add('is-idle');
+  else if(m.includes('STOP')) el.classList.add('is-stopped');
+  else if(m.includes('LIVE')) el.classList.add('is-live');
+  else if(m.includes('ERROR')) el.classList.add('is-error');
+  else if(m.includes('SEND')) el.classList.add('is-sending');
+  else if(m.includes('SEED')) el.classList.add('is-seeded');
+  else if(m.includes('FETCH')) el.classList.add('is-fetching');
+}
+function setLastUpdate(){ byId('lastUpdate').textContent=nowStamp(); }
+
+const BELL=String.fromCharCode(7);
+const REFRESH_INTERVAL_DEFAULT=60*1000;
+const MAX_SCAN=1000; // soft cap to avoid pathological feeds
+
+// clamp helper (0 => unlimited)
+function clampText(s){
+  const el = byId('charLimit');
+  const n = el ? parseInt(el.value||'0',10) : 0;
+  if(!Number.isFinite(n) || n<=0) return s;
+  return (s||'').slice(0,n);
+}
+
+// ======= ITA2 / Baudot =======
+const LTRS=0b11111, FIGS=0b11011, BLANK=0b00000;
+const BAUDOT={
+  LTRS:{'A':0b00011,'B':0b11001,'C':0b01110,'D':0b01001,'E':0b00001,'F':0b01101,'G':0b11010,'H':0b10100,'I':0b00110,'J':0b01011,'K':0b01111,'L':0b10010,'M':0b11100,'N':0b01100,'O':0b11000,'P':0b10110,'Q':0b10111,'R':0b01010,'S':0b00101,'T':0b10000,'U':0b00111,'V':0b11110,'W':0b10011,'X':0b11101,'Y':0b10101,'Z':0b10001,'\r':0b01000,'\n':0b00010,' ':0b00100},
+  FIGS:{'-':0b00011,'?':0b11001,':':0b01110,'$':0b01001,'3':0b00001,'!':0b01101,'&':0b11010,'#':0b10100,'8':0b00110,"'":0b01011,'(':0b01111,')':0b10010,'.':0b11100,',':0b01100,'9':0b11000,'0':0b10110,'1':0b10111,'4':0b01010,BELL:0b00101,'5':0b10000,'7':0b00111,';':0b11110,'2':0b10011,'/':0b11101,'6':0b10101,'+':0b10001,'\r':0b01000,'\n':0b00010,' ':0b00100}
+};
+const ALLOWED=new Set("#ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:;.,-'()/&$?!+ \r\n".split(''));
+function coerceChar(ch){
+  if(ch===BELL) return ch;
+  if(ALLOWED.has(ch)) return ch;
+  if(/[a-z]/.test(ch)) return ch.toUpperCase();
+  const map={'“':'\'','”':'\'','‘':'\'','’':'\'','–':'-','—':'-','=':'-','_':'-','*':'#','@':'&','[':'(',']':')','{':'(', '}':')','\\':'/','|':'/','<':'(','>':')','"':'\''};
+  return map[ch]||' ';
+}
+function sanitizeToITA2(text,mapNearest=true){
+  let out='';
+  for(const raw of text){
+    if(raw===BELL){ out+=raw; continue; }
+    if(raw==='%'){ out+='PERCENT'; continue; }
+    let ch=raw.toUpperCase();
+    if(mapNearest) ch=coerceChar(ch); else if(!ALLOWED.has(ch)) ch=' ';
+    out+=ch;
+  }
+  return out;
+}
+function wrapCols(text, cols){
+  // Word-aware wrap
+  const out = [];
+  const measure = (s) => {
+    let n = 0;
+    for (const ch of s) if (ch.charCodeAt(0) !== 7) n++;
+    return n;
+  };
+
+  for (const ln of text.split(/\n/)) {
+    if (ln.length === 0) { out.push(''); continue; }
+    const words = ln.trim().split(/\s+/).filter(Boolean);
+    let cur = '';
+
+    for (const w of words) {
+      const wlen = measure(w);
+      if (cur === '') {
+        if (wlen <= cols) {
+          cur = w;
+        } else {
+          let i = 0;
+          while (i < w.length) { out.push(w.slice(i, i + cols)); i += cols; }
+          cur = '';
+        }
+      } else {
+        const clen = measure(cur);
+        if (clen + 1 + wlen <= cols) {
+          cur += ' ' + w;
+        } else {
+          out.push(cur);
+          if (wlen <= cols) {
+            cur = w;
+          } else {
+            let i = 0;
+            while (i < w.length) { out.push(w.slice(i, i + cols)); i += cols; }
+            cur = '';
+          }
+        }
+      }
+    }
+    if (cur !== '') out.push(cur);
+  }
+
+  return out.join('\n');
+}
+
+// ======= Encoding (NO BLANK padding) =======
+function charMode(ch){
+  if(ch===' '||ch==='\r'||ch==='\n'||(ch>='A'&&ch<='Z')) return 'LTRS';
+  const figs="#0123456789:;.,-'()/&$?!+".split('');
+  return figs.includes(ch)?'FIGS':'LTRS';
+}
+function codeFor(ch,mode){ const t=BAUDOT[mode]; return (t[ch]!==undefined)?t[ch]:null; }
+function emitBell(out){
+  const n=Math.max(1,Math.min(5,parseInt(byId('bellRepeat').value||'1',10)));
+  const mode=(byId('bellMode') && byId('bellMode').value) || 'ita2';
+  if(mode==='none') return;
+  const selected=(mode==='ascii')?'ita2':mode; // backward-compat
+  if(selected==='ita2' || selected==='figs_s'){
+    out.push(FIGS);
+    for(let i=0;i<n;i++) out.push(BAUDOT.FIGS.BELL);
+    out.push(LTRS);
+  }
+}
+function baudotEncodePrintable(str){
+  const out=[]; let shift='LTRS';
+  for(const ch of str){
+    if(ch===BELL){ emitBell(out); shift='LTRS'; continue; }
+    if(ch==='\n'){ const first=byId('crlfOrder').checked?'\r':'\n'; const second=byId('crlfOrder').checked?'\n':'\r'; out.push(BAUDOT.LTRS[first]); out.push(BAUDOT.LTRS[second]); continue; }
+    if(ch==='\r') continue;
+    const upper=ch.toUpperCase(); const target=charMode(upper);
+    if(target!==shift){ out.push(target==='LTRS'?LTRS:FIGS); shift=target; }
+    const code=codeFor(upper,shift); if(code!==null) out.push(code);
+  }
+  if(byId('forceLTRSend').checked&&shift!=='LTRS') out.push(LTRS);
+  return out;
+}
+function makeBitStream(codes,stopBits=1.5){
+  const bits=[];
+  for(const code of codes){ bits.push(0); for(let i=0;i<5;i++) bits.push((code>>i)&1); const full=Math.floor(stopBits); for(let i=0;i<full;i++) bits.push(1); if(stopBits-full>0) bits.push(1.5); }
+  return bits;
+}
+
+// ======= Audio Synthesis =======
+let audioCtx=null, playingNode=null;
+function synthPlayAFSK(bits,{mark=2125,space=2295,baud=45.45,level=0.5,leadIn=5.0,tailOut=0.3}={}){
+  if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();
+  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:44100});
+  const sr=audioCtx.sampleRate, spb=sr/baud; let total=Math.floor((leadIn+tailOut)*sr);
+  for(const b of bits) total+=Math.floor(spb*(b===1.5?0.5:1));
+  const buf=audioCtx.createBuffer(1,total,sr), data=buf.getChannelData(0);
+  let phase=0, idx=0, twoPi=2*Math.PI;
+  for(let i=0;i<Math.floor(leadIn*sr);i++){ data[idx++]=Math.sin(phase)*level; phase+=twoPi*mark/sr; if(phase>twoPi) phase-=twoPi; }
+  for(const b of bits){ const dur=Math.floor(spb*(b===1.5?0.5:1)); const f=(b===1||b===1.5)?mark:space; for(let i=0;i<dur;i++){ data[idx++]=Math.sin(phase)*level; phase+=twoPi*f/sr; if(phase>twoPi) phase-=twoPi; } }
+  for(let i=idx;i<total;i++){ data[i]=Math.sin(phase)*level; phase+=twoPi*mark/sr; if(phase>twoPi) phase-=twoPi; }
+  const src=audioCtx.createBufferSource(); src.buffer=buf; src.connect(audioCtx.destination); src.start();
+  playingNode=src; src.onended=()=>{ playingNode=null; setStatus('IDLE'); playNextInQueue(); };
+}
+function stopAudio(){ if(playingNode){ try{ playingNode.stop(); }catch{} playingNode=null; } }
+
+// ======= State (poll & dedupe) =======
+let pollHandle = null;           // poll timer (single)
+const seen = new Set();          // used by dedup + tests
+let lastItems = null;            // for preview regeneration
+let multiMode=false;             // multi-feed aggregator flag
+let multiUrls=[];                // normalized list of URLs when multiMode
+
+function nickForUrl(url){
+  const nu=normalizeUrl(url);
+  const m=managedFeeds.find(f=>normalizeUrl(f.url)===nu);
+  return (m && (m.nick||deriveNick(m.url))) || deriveNick(nu);
+}
+function updateHeader(url){
+  return `[${nickForUrl(url)}] ${nowStamp()}`;
+}
+
+// ======= Feed Manager State & Helpers =======
+let managedFeeds=[]; // [{url, enabled, nick}]
+function ensureUnique(arr){ return Array.from(new Set(arr)); }
+function normalizeUrl(input){
+  let s=(input||'').trim();
+  if(!s) return s;
+  if(s.startsWith('//')) s='https:'+s;
+  if(!/^https?:\/\//i.test(s)) s='https://'+s;
+  return s;
+}
+function parseUrlList(s){
+  return (s||'')
+    .split(/[\s,;]+/)
+    .map(x=>x.trim())
+    .filter(Boolean);
+}
+function hostFromUrl(u){ try{ return new URL(u).hostname.replace(/^www\./,''); }catch(e){ return (u||''); } }
+function deriveNick(u){ const h=hostFromUrl(u); const parts=h.split('.').filter(Boolean); const bad=['feeds','rss','news','www']; if(parts.length>1 && bad.includes(parts[0])) return parts[1]; return parts[0]||h||'feed'; }
+function managerSyncFromField(){
+  // No external field; just (re)render
+  renderFeedList();
+}
+function managerSyncToField(){ /* no external field to mirror */ }
+function renderFeedList(){
+  const list=byId('feedList');
+  list.innerHTML='';
+  if(managedFeeds.length===0){
+    const empty=document.createElement('div');
+    empty.className='hint';
+    empty.textContent='No feeds yet. Add one above.';
+    list.appendChild(empty);
+    return;
+  }
+  managedFeeds.forEach((item,idx)=>{
+    const row=document.createElement('div');
+    row.className='feedItem';
+
+    const chk=document.createElement('input');
+    chk.type='checkbox';
+    chk.className='switch';
+    chk.checked=!!item.enabled;
+    chk.onchange=()=>{ item.enabled=chk.checked; };
+
+    const nick=document.createElement('input');
+    nick.type='text';
+    nick.placeholder='Nickname';
+    nick.value=item.nick||deriveNick(item.url);
+    nick.onchange=()=>{ item.nick=(nick.value||'').trim(); };
+
+    const inp=document.createElement('input');
+    inp.type='text';
+    inp.value=item.url;
+    inp.placeholder='Feed URL';
+    inp.onchange=()=>{ item.url=normalizeUrl(inp.value); inp.value=item.url; if(!item.nick) item.nick=deriveNick(item.url); };
+
+    const up=document.createElement('button');
+    up.className='btn secondary';
+    up.textContent='↑';
+    up.title='Move up';
+    up.onclick=()=>{ if(idx>0){ const tmp=managedFeeds[idx-1]; managedFeeds[idx-1]=managedFeeds[idx]; managedFeeds[idx]=tmp; renderFeedList(); } };
+
+    const down=document.createElement('button');
+    down.className='btn secondary';
+    down.textContent='↓';
+    down.title='Move down';
+    down.onclick=()=>{ if(idx<managedFeeds.length-1){ const tmp=managedFeeds[idx+1]; managedFeeds[idx+1]=managedFeeds[idx]; managedFeeds[idx]=tmp; renderFeedList(); } };
+
+    const del=document.createElement('button');
+    del.className='btn warn';
+    del.textContent='Remove';
+    del.onclick=()=>{ managedFeeds.splice(idx,1); renderFeedList(); };
+
+    row.appendChild(chk);
+    row.appendChild(nick);
+    row.appendChild(inp);
+    row.appendChild(up);
+    row.appendChild(down);
+    row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+
+// ======= Fetch helpers (robust CORS + fallback) =======
+function addCacheBust(u){
+  if(!u) return u;
+  try {
+    const host = new URL(u).hostname.toLowerCase();
+    // NWS rejects unknown params – don't add cache-bust for weather.gov
+    if (host.endsWith('weather.gov')) return u;
+  } catch(e){}
+  return u + (u.includes('?') ? '&' : '?') + '__t=' + Date.now();
+
+}
+function unique(arr){ return Array.from(new Set(arr)); }
+function buildCandidates(feedUrl){
+  const url = normalizeUrl(feedUrl);
+  const p = (byId('corsPrefix').value||'').trim();
+  const enc = encodeURIComponent(addCacheBust(url));
+  const candidates = [];
+
+  // Always include direct
+  candidates.push(addCacheBust(url));
+
+  // If proxy prefix present, try sensible forms
+  if(p){
+    const lower = p.toLowerCase();
+    const hasUrlParam = /[?&]url=/.test(p);
+    const base = p.endsWith('?') ? p : (p + (p.includes('?') ? '&' : '?'));
+
+    if(hasUrlParam){
+      candidates.push(p + enc);
+      candidates.push(p + addCacheBust(url));
+    } else if(/(^https?:\/\/)?corsproxy\.io\//.test(lower)){
+      candidates.push(base + addCacheBust(url));
+      candidates.push(base + encodeURIComponent(url));
+    } else {
+      candidates.push(base + enc);
+    }
+  }
+
+  // AllOrigins raw fallback (encoded target)
+  candidates.push('https://api.allorigins.win/raw?url=' + enc);
+
+  return unique(candidates);
+}
+// Back-compat: keep withCors for tests; return first candidate
+function withCors(url){
+  const list = buildCandidates(url);
+  return list[0];
+}
+async function fetchText(target,{timeoutMs=8000}={}){
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort('timeout'), timeoutMs);
+  try{
+    const r=await fetch(target,{
+      mode:'cors',
+      cache:'no-store',
+      redirect:'follow',
+      signal:ctrl.signal,
+      headers:{
+        'pragma':'no-cache',
+        'cache-control':'no-cache',
+        'accept':'application/atom+xml, application/rss+xml, application/xml;q=0.9, application/json;q=0.6, text/*;q=0.4, */*;q=0.1'
+      }
+    });
+    const ct=(r.headers.get('content-type')||'').toLowerCase();
+    const text=await r.text();
+    if(!r.ok && !text){ throw new Error('HTTP '+r.status); }
+    return {text,ct,status:r.status};
+  } finally{ clearTimeout(t); }
+}
+async function fetchFeedWithFallback(url){
+  const attempts = buildCandidates(url);
+  let lastErr=null;
+  for(const target of attempts){
+    try{
+      const res = await fetchText(target, {timeoutMs: 9000});
+      if(res && res.text){ return res; }
+    }catch(e){ lastErr=e; }
+  }
+  throw new Error('All fetch attempts failed: '+(lastErr? lastErr.message : 'unknown')+'; tried '+attempts.length+' URL(s).');
+}
+
+function htmlToItems(html){
+  const doc=new DOMParser().parseFromString(html,'text/html');
+  const articles=Array.from(doc.querySelectorAll('article'));
+  if(articles.length){
+    return articles.map((art,i)=>{ const h=art.querySelector('h1,h2,h3,.entry-title,[itemprop=\"headline\"]'); const a=h&&h.querySelector('a'); const title=(h?(h.textContent||'').trim():(doc.title||`ARTICLE ${i+1}`)).slice(0,200); const link=a?(a.getAttribute('href')||''):''; const paras=Array.from(art.querySelectorAll('p')).map(p=>p.textContent.trim()).filter(Boolean); const desc=clampText(paras.join('\n'))||''; return {title,link,desc}; }).filter(x=>x.title||x.desc);
+  }
+  const bodyText=(doc.body?doc.body.innerText:'').replace(/\s+$/,'');
+  const first=bodyText.split(/\n{2,}/).slice(0,3).join('\n');
+  return [{title:(doc.title||'HTML PAGE'),link:'',desc:clampText(first)}];
+}
+
+/* ======= NEW: helpers for namespaced ATOM/RSS ======= */
+function looksXML(s){
+  return /^\s*<(?:\?xml|rss\b|feed\b|rdf\b|channel\b|entry\b)/i.test(s||'');
+}
+function unwrapProxyXml(j){
+  const keys=['contents','content','body','result','data','html','response'];
+  for(const k of keys){ const v=j&&j[k]; if(typeof v==='string' && looksXML(v)) return v; }
+  if(typeof j==='string' && looksXML(j)) return j;
+  return null;
+}
+function parseAtomOrRss(xmlText){
+  const dom=new DOMParser().parseFromString(xmlText,'application/xml');
+  // If the XML parser threw an error, attempt a lenient HTML parse fallback
+  if(dom.querySelector('parsererror')){
+    const asHtml=new DOMParser().parseFromString(xmlText,'text/html');
+    const nodes=Array.from(asHtml.querySelectorAll('item, entry'));
+    return nodes.map((it,i)=>({
+      title:(it.querySelector('title')?.textContent||`ITEM ${i+1}`).trim(),
+      link: it.querySelector('link[href]')?.getAttribute('href') || it.querySelector('link')?.textContent || '',
+      desc: (it.querySelector('description, summary, content, content\\:encoded')?.textContent||'').trim()
+    }));
+  }
+  const atomNS='http://www.w3.org/2005/Atom';
+  let items = Array.from(dom.getElementsByTagName('item')).map((it,i)=>({
+    title:(it.getElementsByTagName('title')[0]?.textContent||`ITEM ${i+1}`).trim(),
+    link: (it.getElementsByTagName('link')[0]?.textContent||'').trim(),
+    desc: (it.getElementsByTagName('description')[0]?.textContent||it.getElementsByTagName('content:encoded')[0]?.textContent||'').trim()
+  }));
+  if(items.length===0){
+    let entries=Array.from(dom.getElementsByTagName('entry'));
+    if(entries.length===0) entries=Array.from(dom.getElementsByTagNameNS(atomNS,'entry'));
+    items=entries.map((it,i)=>{
+      const links=[...Array.from(it.getElementsByTagName('link')), ...Array.from(it.getElementsByTagNameNS(atomNS,'link'))];
+      let href='';
+      for(const el of links){ const h=el.getAttribute&&el.getAttribute('href'); const rel=el.getAttribute&&el.getAttribute('rel'); if(!href && h) href=h; if(rel==='alternate'&&h){ href=h; break; } }
+      const titleNode=it.getElementsByTagName('title')[0]||it.getElementsByTagNameNS(atomNS,'title')[0];
+      const descNode=it.getElementsByTagName('summary')[0]||it.getElementsByTagNameNS(atomNS,'summary')[0]||it.getElementsByTagName('content')[0]||it.getElementsByTagNameNS(atomNS,'content')[0];
+      return { title:(titleNode?.textContent||`ENTRY ${i+1}`).trim(), link:href||'', desc:(descNode?.textContent||'').trim() };
+    });
+  }
+  return items;
+}
+
+/* ======= Feed cleaning helpers (Hackaday & generic) ======= */
+function looksHtmlish(s){ return /<\w+[^>]*>/i.test(s||''); }
+
+function htmlToPlainText(html, {stripImages=true} = {}){
+  try{
+    const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+    doc.querySelectorAll('script,style,noscript,template').forEach(n=>n.remove());
+    if (stripImages) doc.querySelectorAll('img,figure,picture,figcaption,svg,iframe,video,source').forEach(n=>n.remove());
+    const text = doc.body ? doc.body.innerText : (doc.documentElement.textContent || '');
+    return text.replace(/\s+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  }catch(e){
+    return (html||'').replace(/<[^>]+>/g,' ').replace(/\s{2,}/g,' ').trim();
+  }
+}
+
+function cleanHackadayFooter(s){
+  return (s||'')
+    .replace(/The post .*? appeared first on Hackaday\.?/is,'')
+    .replace(/Continue reading.*$/im,'')
+    .replace(/Filed under:.*$/im,'')
+    .trim();
+}
+
+function cleanFeedItem(it, originHost=''){
+  const out = {...it};
+  const host = ((out.link||'').match(/\/\/([^/]+)/)?.[1] || originHost || '').toLowerCase();
+
+  if (looksHtmlish(out.title)) out.title = htmlToPlainText(out.title, {stripImages:true});
+  if (looksHtmlish(out.desc))  out.desc  = htmlToPlainText(out.desc,  {stripImages:true});
+
+  if (host.includes('hackaday.com')){
+    out.title = cleanHackadayFooter(out.title);
+    out.desc  = cleanHackadayFooter(out.desc);
+  }
+
+  out.title = (out.title||'').trim();
+  out.desc  = clampText((out.desc||'').trim());
+  return out;
+}
+
+function postProcessFeedItems(items, originUrl){
+  const host = hostFromUrl(originUrl);
+  return (items||[]).map(it => cleanFeedItem(it, host)).filter(x => (x.title || x.desc));
+}
+/* ======= end helpers ======= */
+
+/* ======= parseFeed (replaced to prefer XML before JSON) ======= */
+function parseFeed({text,ct}){
+  text=(text||'').trim(); const lower=(ct||'').toLowerCase();
+
+  // 1) Native XML (RSS/ATOM)
+  if(looksXML(text) || lower.includes('xml')){
+    const items=parseAtomOrRss(text);
+    if(items.length) return items.slice(0,MAX_SCAN);
+  }
+
+  // 2) JSON: unwrap proxy XML or handle GeoJSON/JSON Feed
+  if(lower.includes('json')||text.startsWith('{')||text.startsWith('[')){
+    try{
+      const j=JSON.parse(text);
+
+      // 2a) Proxy-wrapped XML
+      const inner=unwrapProxyXml(j);
+      if(inner && looksXML(inner)){
+        const items=parseAtomOrRss(inner);
+        if(items.length) return items.slice(0,MAX_SCAN);
+      }
+
+      // 2b) GeoJSON/JSON-LD
+      if(Array.isArray(j?.features)){
+        return j.features.slice(0,MAX_SCAN).map((f, i) => {
+          const p = f?.properties || {};
+
+          // USGS earthquakes
+          if (p.title || (p.mag != null && p.place)) {
+            const title = (p.title || `M ${p.mag} — ${p.place}`) + '';
+            const link  = (p.url || p.detail || f.id || '') + '';
+            const tms  = typeof p.time === 'number' ? new Date(p.time)
+                       : (p.time ? new Date(p.time) : null);
+            const when = (tms && !isNaN(tms)) ? tms.toISOString().replace('T',' ').replace(/\..+/, 'Z') : '';
+            const coords = Array.isArray(f?.geometry?.coordinates) ? f.geometry.coordinates : null;
+            const depthKm = (coords && typeof coords[2] === 'number') ? coords[2] : null;
+            const descParts = [];
+            if (typeof p.mag === 'number') descParts.push(`Mag: ${p.mag}`);
+            if (p.place) descParts.push(`Place: ${p.place}`);
+            if (depthKm != null) descParts.push(`Depth: ${depthKm} km`);
+            if (when) descParts.push(`Time: ${when}`);
+            return { title, link, desc: clampText(descParts.join('\n')) };
+          }
+
+          // NWS alerts (GeoJSON)
+          const fmtIso = s => {
+            if (!s) return '';
+            const d = new Date(s);
+            return isNaN(d) ? '' : d.toISOString().replace('T',' ').replace(/\..+/, 'Z');
+          };
+          const when  = p.effective || p.onset || p.sent;
+          const until = p.expires || p.ends;
+          const title = (p.headline || (p.event && p.areaDesc ? `${p.event} — ${p.areaDesc}` : null) || `ALERT ${i+1}`) + '';
+          const link  = (p['@id'] || p.id || p.url || f.id || '') + '';
+          const desc  = clampText([
+            (p.description || '').trim(),
+            p.instruction ? `Instruction: ${p.instruction}` : '',
+            (p.severity || p.urgency || p.certainty)
+              ? `Severity: ${p.severity || ''} / ${p.urgency || ''} / ${p.certainty || ''}`.replace(/(\s\/\s)+$/,'')
+              : '',
+            p.areaDesc ? `Area: ${p.areaDesc}` : '',
+            when  ? `Effective: ${fmtIso(when)}` : '',
+            until ? `Expires: ${fmtIso(until)}`   : '',
+          ].filter(Boolean).join('\n'));
+          return { title, link, desc };
+        });
+      }
+
+      // 2c) JSON Feed / arrays
+      if(Array.isArray(j)) return j.slice(0,MAX_SCAN).map((o,i)=>({title:(o.title||`ITEM ${i+1}`)+'',link:(o.link||o.url||'')+'',desc:(o.summary||o.content_text||o.description||'')+''}));
+      if(j&&Array.isArray(j.items)) return j.items.slice(0,MAX_SCAN).map((o,i)=>({title:(o.title||`ITEM ${i+1}`)+'',link:(o.url||o.external_url||'')+'',desc:(o.summary||o.content_text||o.content_html||'')+''}));
+
+      // 2d) Fallback: show raw JSON
+      const s=JSON.stringify(j);
+      return [{title:'JSON FEED',link:'',desc:clampText(s)}];
+    }catch(e){ /* fallthrough to text/plain */ }
+  }
+
+  // 3) HTML pages
+  if(lower.includes('html')||/^(?:<!DOCTYPE html>|<html[\s>])/i.test(text)) return htmlToItems(text);
+
+  // 4) Plain text
+  const lines=text.split(/\r?\n/).filter(x=>x.trim().length);
+  return lines.slice(0,MAX_SCAN).map((ln,i)=>({title:`LINE ${i+1}`,link:'',desc:ln}));
+}
+
+/* ======= Boilerplate/ads stripper for full text ======= */
+function stripAdsAndBoilerplate(text, originHost=''){
+  try{
+    let t = (text||'').replace(/\u00A0/g,' ').trim();
+    const host = (originHost||'').toLowerCase();
+
+    // Drop common footer sections (site-agnostic)
+    // Remove tails like "More Great ...", "Most Popular", "Related Stories" and following lists
+    t = t.replace(/(?:^|\n)(?:more\s+(?:great\s+)?stories|more\s+(?:from\s+)?[A-Z][\w-]+|most\s+popular|related\s+(?:stories|articles)|read\s+more)\b[\s\S]*$/i, '');
+
+    // Split + filter line-by-line
+    const lines = t.split(/\r?\n/);
+    const keep = [];
+    for (let raw of lines){
+      const ln = raw.trim();
+
+      // Toss empty lines if too many in a row (we'll collapse later)
+      if(!ln){ keep.push(''); continue; }
+
+      // 1) "ADVERTISEMENT", "AD", "SPONSORED", etc.
+      if(/^(?:ad|ads|advertisement|advertorial|sponsored|paid\s+post|promotion)\b[\.\!\-–—]*$/i.test(ln)) continue;
+
+      // 2) All-caps short promo tags (AMAZON, WALMART, SHOP, SUBSCRIBE, NEWSLETTER)
+      if(/^[A-Z0-9&$!\-\/ ]{2,30}$/.test(ln) && /[A-Z]/.test(ln)){
+        if(/\b(AMAZON|WALMART|TARGET|BEST\s*BUY|SHOP|SUBSCRIBE|NEWSLETTER|TRENDING|POPULAR|DEALS?)\b/i.test(ln)) continue;
+      }
+
+      // 3) Affiliate disclaimers
+      if(/may\s+earn\s+(?:an?\s+)?affiliate\s+commission/i.test(ln)) continue;
+      if(/if\s+you\s+buy\s+something\s+using\s+links/i.test(ln)) continue;
+
+      // 4) WIRED-specific tails and blocks
+      if(host.includes('wired.com')){
+        // Cut everything after these headers
+        if(/^more\s+great\s+wired\s+stories/i.test(ln)) break;
+        if(/^wired\s+recommends/i.test(ln)) break;
+        // Single-line promos
+        if(/^(?:subscribe|sign\s*up)\b/i.test(ln)) continue;
+        if(/\bWired\b.*newsletter/i.test(ln)) continue;
+        if(/^AMAZON\b/.test(ln)) continue; // your example
+      }
+
+      // 5) Generic subscription/newsletter nags
+      if(/^(subscribe|sign\s*up|newsletter|gift\s+article|leave\s+a\s+comment)\b/i.test(ln)) continue;
+
+      // 6) Social/link-only blurbs
+      if(/^(read|watch|listen)\s+(more|next)\b/i.test(ln)) continue;
+
+      keep.push(raw);
+    }
+
+    // Reassemble: collapse 3+ blank lines -> 2
+    t = keep.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+    return t;
+  }catch(e){
+    return text||'';
+  }
+}
+/* ======= end boilerplate/ads stripper ======= */
+
+/* ======= Full-text extraction (optional) ======= */
+function extractArticleText(html){
+  try{
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    doc.querySelectorAll('script,style,noscript,template').forEach(n=>n.remove());
+    const selectors=[
+      'article','main','[role="main"]','div[itemprop="articleBody"]',
+      '.article-body','.articleBody','.entry-content','.post-content',
+      '.content__article-body','.story-body','#content','.post','.entry','.c-article-body'
+    ];
+    let best=null, bestScore=0;
+    const score=(el)=>{
+      const ps=Array.from(el.querySelectorAll('p'));
+      if(ps.length===0) return (el.textContent||'').trim().length;
+      return ps.reduce((s,p)=>s+((p.textContent||'').trim().length),0);
+    };
+    const roots=[]; selectors.forEach(sel=>roots.push(...doc.querySelectorAll(sel)));
+    if(roots.length===0 && doc.body) roots.push(doc.body);
+    roots.forEach(el=>{ const sc=score(el); if(sc>bestScore){ best=el; bestScore=sc; } });
+    if(!best) return '';
+    const paras=Array.from(best.querySelectorAll('p')).map(p=>p.textContent.trim()).filter(Boolean);
+    let text=(paras.length? paras.join('\n') : (best.textContent||''))
+      .replace(/\s+\n/g,'\n')
+      .replace(/\n{3,}/g,'\n\n');
+    text = stripAdsAndBoilerplate(text, hostFromUrl(originUrl));
+    return clampText(text);
+  }catch(e){ return ''; }
+}
+async function enrichWithFullText(items){
+  const out=[];
+  for(const it of items){
+    const link=(it.link||'').trim();
+    if(!link){ out.push(it); continue; }
+    try{
+      const res=await fetchFeedWithFallback(link);
+      const body=extractArticleText(res.text||'', link);
+      if(body){ out.push({...it, desc: clampText((it.desc? it.desc+'\n\n':'') + body)}); }
+      else { out.push(it); }
+    }catch(e){ out.push(it); }
+  }
+  return out;
+}
+
+// ---- Strip links for output-only (preview/send) ----
+function stripLinks(s){
+  if(!s) return s;
+  return s
+    .replace(/(?:https?:\/\/|ftp:\/\/|mailto:)\S+/gi,'')
+    .replace(/(?:www\.)\S+/gi,'')
+    .replace(/\b[\w.-]+\.(?:com|org|net|io|co|news|gov|edu|uk|de|jp|fr|ca|au|us|tv|me|ai|app|dev|blog|site|info)(?:\/\S*)?/gi,'')
+    .replace(/\s{2,}/g,' ')
+    .trim();
+}
+
+// Keys used for seen/dedup — match current dedup behavior (stripLinks state aware)
+function itemKey(it){
+  const rawTitle=(it.title||'').toString();
+  const rawLink=(it.link||'').toString();
+  const doStrip = byId('stripLinksUI') ? !!byId('stripLinksUI').checked : true;
+  const title = doStrip ? stripLinks(rawTitle) : rawTitle;
+  return (title+'|'+rawLink).toUpperCase();
+}
+function seedSeen(items){ for(const it of items){ seen.add(itemKey(it)); } }
+function diffNew(items){ const out=[]; for(const it of items){ const k=itemKey(it); if(!seen.has(k)){ seen.add(k); out.push(it); } } return out; }
+
+function formatItemsForTTY(items, opts={}){
+  const skipSeen = !!opts.skipSeen; // when true, do NOT skip because of seen(), and do NOT mutate seen()
+  const bellWords=byId('bellKeywords').value.toUpperCase().split(',').map(s=>s.trim()).filter(Boolean);
+  const doStrip = byId('stripLinksUI') ? !!byId('stripLinksUI').checked : true;
+  const out=[];
+  for(const it of items){
+    const rawTitle=(it.title||'').toString();
+    const rawLink =(it.link||'').toString();
+    const rawDesc =(it.desc||'').toString();
+    const title = doStrip ? stripLinks(rawTitle) : rawTitle;
+    const desc  = doStrip ? stripLinks(rawDesc)  : rawDesc;
+    const descClamped = clampText(desc);
+    const key=(title+'|'+rawLink).toUpperCase();
+    let block = title;
+    if (descClamped) block += '\n' + descClamped;
+    const hasBell=bellWords.length && bellWords.some(w=>w && block.toUpperCase().includes(w));
+    if(!skipSeen){
+      if(byId('dedup').checked && seen.has(key) && !hasBell) continue;
+      seen.add(key);
+    }
+    if(hasBell) block=BELL+block;
+    out.push(block);
+  }
+  return out.join('\n\n');
+}
+
+// ======= Queue + Sending =======
+const sendQueue=[];
+function enqueueSend(text){
+  if(!text) return;
+  const cols=+byId('lineLen').value;
+  let t=sanitizeToITA2(text, byId('mapNearest').checked);
+  t=wrapCols(t,cols);
+  if(byId('syncCRLF').checked) t='\r\n'+t+'\r\n';
+  byId('preview').value=t;
+  sendQueue.push(t);
+  playNextInQueue();
+}
+function playNextInQueue(){
+  if(playingNode||!sendQueue.length) return;
+  const t=sendQueue.shift();
+  const normalized=t.replace(/\r\n/g,'\n');
+  const codes=baudotEncodePrintable(normalized);
+  const bits=makeBitStream(codes,+byId('stopBits').value);
+  const p={mark:+byId('mark').value,space:+byId('space').value,baud:+byId('baud').value,level:+byId('level').value,leadIn:5.0,tailOut:0.3};
+  setStatus('SENDING…');
+  synthPlayAFSK(bits,p);
+}
+
+// ======= Controls =======
+byId('stopAudio').onclick=()=>{ stopAudio(); setStatus('STOPPED'); };
+byId('testBell').onclick=()=>{ enqueueSend(BELL+BELL+BELL+'BELL TEST'); };
+byId('resetSeen').onclick=()=>{ seen.clear(); setStatus('SEEN CLEARED'); };
+byId('stripLinksUI').onchange=()=>{ if(lastItems){ const text=formatItemsForTTY(lastItems,{skipSeen:true}); byId('preview').value=wrapCols(sanitizeToITA2(text, byId('mapNearest').checked), +byId('lineLen').value); } };
+
+// Feed Manager controls
+byId('addFeed').onclick=()=>{
+  const v=normalizeUrl(byId('newFeed').value);
+  if(!v) return;
+  if(!managedFeeds.some(f=>f.url===v)) managedFeeds.push({url:v,enabled:true,nick:deriveNick(v)});
+  byId('newFeed').value='';
+  renderFeedList();
+};
+byId('clearFeeds').onclick=()=>{ managedFeeds.length=0; renderFeedList(); };
+
+// ======= Live Polling (single or multi) =======
+async function fetchAndUpdate(url){
+  try{
+    const res=await fetchFeedWithFallback(url);
+    let items=parseFeed(res);
+      items = postProcessFeedItems(items, url); // full feed (capped by MAX_SCAN)
+
+    // Compute new items since last seed/poll
+    let newItems = diffNew(items);
+
+    // Only enrich new items
+    if (newItems.length && byId('fullText') && byId('fullText').checked){
+      newItems = await enrichWithFullText(newItems);
+    }
+    lastItems=items;
+
+    // Debug panel shows all items; send only new
+    const human=items.map(i=>`${i.title}${i.link?' — '+i.link:''}\n${clampText(i.desc||'')}`).join('\n\n');
+    byId('fetched').value=(res.ct?(`[${res.ct}]\n`):'')+human;
+
+    const text=newItems.length? (updateHeader(url)+'\n'+formatItemsForTTY(newItems,{skipSeen:true})) : '';
+    if(text){ if(byId('autoSend').checked){ enqueueSend(text); } else { byId('preview').value=wrapCols(sanitizeToITA2(text,byId('mapNearest').checked),+byId('lineLen').value); } }
+    setStatus('LIVE'); setLastUpdate();
+  }catch(e){
+    setStatus('FETCH ERROR');
+    byId('fetched').value = '[fetch error]\n'+ (e && e.message ? e.message : String(e));
+  }
+}
+async function fetchAndUpdateAll(){
+  const urls = multiUrls.slice();
+  const pieces=[]; const notes=[];
+  for(const url of urls){
+    try{
+      const res=await fetchFeedWithFallback(url);
+      let items=parseFeed(res);
+      items = postProcessFeedItems(items, url);
+      let newItems=diffNew(items);
+      if(newItems.length && byId('fullText') && byId('fullText').checked){
+        newItems = await enrichWithFullText(newItems);
+      }
+      if(newItems.length){
+        const txt=formatItemsForTTY(newItems,{skipSeen:true});
+        if(txt) pieces.push(updateHeader(url)+'\n'+txt);
+        notes.push(`+${newItems.length} new @ ${url}`);
+      } else {
+        notes.push(`0 new @ ${url}`);
+      }
+    }catch(e){
+      notes.push(`[error] ${url} — ${e && e.message ? e.message : e}`);
+    }
+  }
+  byId('fetched').value = '[multi poll]\n' + notes.join('\n');
+  if(pieces.length){
+    const block=pieces.join('\n\n');
+    if(byId('autoSend').checked){ enqueueSend(block); }
+    else { byId('preview').value=wrapCols(sanitizeToITA2(block,byId('mapNearest').checked),+byId('lineLen').value); }
+  }
+  setStatus('LIVE'); setLastUpdate();
+}
+
+byId('start').onclick=async()=>{
+  const urls = managedFeeds.filter(f=>f.enabled && f.url).map(f=>normalizeUrl(f.url));
+  if(!urls.length){ setStatus('NO FEEDS'); return; }
+  multiMode = urls.length>1;
+  multiUrls = urls;
+  const sec=Math.max(5,(+byId('pollSec').value||(REFRESH_INTERVAL_DEFAULT/1000)));
+  if(pollHandle) clearInterval(pollHandle);
+  setStatus('FETCHING…');
+
+  try{
+    if(multiMode){
+      // First pass: seed or emit aggregated
+      if(byId('updatesOnly').checked){
+        let seeded=0; const marks=[];
+        for(const u of urls){
+          try{ const res=await fetchFeedWithFallback(u); const items=parseFeed(res); seedSeen(items); lastItems=items; seeded+=items.length; marks.push(`seeded ${items.length} @ ${u}`);}catch(e){ marks.push(`[seed err] ${u} — ${e && e.message ? e.message : e}`);} }
+        byId('fetched').value='[seeded multi]\n'+marks.join('\n');
+        setStatus('SEEDED'); setLastUpdate();
+      } else {
+        // Emit entire feeds once
+        const pieces=[]; const marks=[];
+        for(const u of urls){
+          try{ let res=await fetchFeedWithFallback(u); let items=parseFeed(res);
+      items = postProcessFeedItems(items, u); if(byId('fullText').checked){ items=await enrichWithFullText(items); } const txt=formatItemsForTTY(items); if(txt) pieces.push(txt); marks.push(`emit ${items.length} @ ${u}`);}catch(e){ marks.push(`[emit err] ${u} — ${e && e.message ? e.message : e}`);} }
+        const block=pieces.join('\n\n');
+        if(block){ if(byId('autoSend').checked){ enqueueSend(block); } else { byId('preview').value=wrapCols(sanitizeToITA2(block,byId('mapNearest').checked),+byId('lineLen').value); } }
+        byId('fetched').value='[initial multi]\n'+marks.join('\n');
+        setStatus('LIVE'); setLastUpdate();
+      }
+      pollHandle=setInterval(()=>fetchAndUpdateAll(), sec*1000);
+    } else {
+      const urlRaw=urls[0];
+      const res=await fetchFeedWithFallback(urlRaw);
+      let items=parseFeed(res);
+      items = postProcessFeedItems(items, urlRaw);
+      if (byId('updatesOnly').checked){
+        seedSeen(items); lastItems=items; byId('fetched').value='[seeded]\n'+items.map(i=>i.title).join('\n'); setStatus('SEEDED'); setLastUpdate();
+      } else {
+        if (byId('fullText') && byId('fullText').checked){ items = await enrichWithFullText(items); }
+        lastItems=items; const text=formatItemsForTTY(items);
+        if(text){ if(byId('autoSend').checked){ enqueueSend(text); } else { byId('preview').value=wrapCols(sanitizeToITA2(text,byId('mapNearest').checked),+byId('lineLen').value); } }
+        setStatus('LIVE'); setLastUpdate();
+      }
+      pollHandle=setInterval(()=>fetchAndUpdate(urlRaw),sec*1000);
+    }
+  }catch(e){
+    setStatus('FETCH ERROR');
+    byId('fetched').value='[fetch error]\n'+(e && e.message ? e.message : String(e));
+  }
+};
+byId('stop').onclick=()=>{ if(pollHandle) clearInterval(pollHandle); pollHandle=null; setStatus('STOPPED'); };
+
+// --- Light self-checks (console only, no UI bloat) ---
+(function lightChecks(){
+  try{
+    // ensure join uses \n\n and not raw linebreak string literal
+    const t = formatItemsForTTY([{title:'A',link:'',desc:'B'},{title:'C',link:'',desc:'D'}],{skipSeen:true});
+    if(!/\n\n/.test(t)) console.warn('[self-check] Expected double newline join, got:', JSON.stringify(t));
+  }catch(e){ console.warn('[self-check] exception', e); }
+})();
+
+// Initialize manager UI
+renderFeedList();
+setStatus('IDLE');
+</script>
+</body>
+</html>
