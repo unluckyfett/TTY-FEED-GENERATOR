@@ -19,7 +19,7 @@ A single‑page, browser‑only tool that polls one or more feeds (RSS/Atom, JSO
 
 ## Quick Start
 
-1. Open **`index.html`** in a modern desktop browser (Chrome/Edge recommended).
+1. Open (https://unluckyfett.github.io/TTY-FEED-GENERATOR/)
 2. In **Feed Source → Feed Manager**, click **Add** to enter one or more feed URLs (RSS/Atom/JSON/text). Give each a **Nickname** so batches can be tagged in the output.
 3. (Optional) Toggle:
    - **Full text (follow links)** – fetch article pages and append extracted body text.
