@@ -255,6 +255,22 @@ function setStatus(txt){
 function setLastUpdate(){ byId('lastUpdate').textContent=nowStamp(); }
 
 const BELL=String.fromCharCode(7);
+const SYMBOL_MAP = {
+  '+': '(PLUS)',
+  '=': '(EQUALS)',
+  '*': '(ASTERISK)',
+  '%': '(PERCENT)',
+  '_': '(UNDERSCORE)',
+  '^': '(CARET)',
+  '~': '(TILDE)',
+  '\\': '(BACK/)',        // backslash
+  '<': '(LESS-THAN)',
+  '>': '(GREATER-THAN)',
+  '`': '(BACKTICK)',
+  '@': '(AT)',
+  '€': '(EURO)'
+};
+
 const REFRESH_INTERVAL_DEFAULT=60*1000;
 const MAX_SCAN=1000; // soft cap to avoid pathological feeds
 
@@ -284,7 +300,12 @@ function sanitizeToITA2(text,mapNearest=true){
   let out='';
   for(const raw of text){
     if(raw===BELL){ out+=raw; continue; }
-    if(raw==='%'){ out+='PERCENT'; continue; }
+        // Only apply word-in-parens mapping when the checkbox is ON
+    if (mapNearest && Object.prototype.hasOwnProperty.call(SYMBOL_MAP, raw)) {
+      out += SYMBOL_MAP[raw];
+      continue;
+    }
+    
     let ch=raw.toUpperCase();
     if(mapNearest) ch=coerceChar(ch); else if(!ALLOWED.has(ch)) ch=' ';
     out+=ch;
